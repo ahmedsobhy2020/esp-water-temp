@@ -37,8 +37,9 @@ DallasTemperature sensors(&oneWire);
 DHT dht(DHTPIN, DHT22,15);
 
 // No default value for the api key, user must supply
-char thingspeak_api_key[20];
+char thingspeak_api_key[20] = ""; //Seems to populate with " " otherwise
 char sensor_type[8] = "DS"; //Default to DS18B20
+String measuring = "Temperature";
 
 //flag for saving data
 bool shouldSaveConfig = false;
@@ -106,7 +107,7 @@ void setup(void)
   // After connecting, parameter.getValue() will get you the configured value
   // id/name placeholder/prompt default length
   WiFiManagerParameter custom_thingspeak_api_key("apikey", "api key", thingspeak_api_key, 17);
-  WiFiManagerParameter custom_sensor_type("sensortype", "sensor type (DS/DHT22)", sensor_type, 8);
+  WiFiManagerParameter custom_sensor_type("sensortype", "sensor type (DS/DHT22/SOIL)", sensor_type, 8);
 
   WiFiManager wifiManager;
 
@@ -153,10 +154,20 @@ void setup(void)
     delay(10);
     dht.begin();
   }
-  else
+  else if (String(sensor_type) == "DS")
   {
     // Start up the DallasTemperature library
     sensors.begin();
+  }
+  else if (String(sensor_type) == "SOIL")
+  {
+    // No library required for analog read
+    Serial.println("Configured for soil moisture sensing");
+    measuring = "Soil Humidity";
+  }
+  else
+  {
+    Serial.println("Unrecognised sensor_type, please reconfigure");
   }
 }
 
@@ -174,7 +185,7 @@ void loop(void)
       return;
     }
   }
-    else
+  else if (String(sensor_type) == "DS")
   {
     // call sensors.requestTemperatures() to issue a global temperature
     // request to all devices on the bus
@@ -191,6 +202,18 @@ void loop(void)
         // 0 refers to the first IC on the wire
     h = 0;
     Serial.println(t);
+  }
+  else if (String(sensor_type) == "SOIL")
+  {
+    h = analogRead(A0);
+    Serial.println("Soil sensor reading: " + String(h));
+    t = ((512 - h) / 512.0) * 100; // The max the sensor seems to go up to is about 428, 512 is close enough
+    Serial.println("As a percentage: " + String(t));
+  }
+  else
+  {
+    Serial.println("Unrecognised sensor_type, please reconfigure");
+    t = -99;
   }
 
   if (client.connect(server,80)) { // "184.106.153.149" or api.thingspeak.com
@@ -216,7 +239,7 @@ void loop(void)
     Serial.println(thingspeak_api_key);
     Serial.print("Sensor Type: ");
     Serial.println(sensor_type);
-    Serial.print("Temperature: ");
+    Serial.print(measuring+": ");
     Serial.print(t);
     Serial.print(" degrees Celcius Humidity: ");
     Serial.print(h);
